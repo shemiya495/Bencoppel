@@ -1,53 +1,70 @@
 <?php
-// Guardar todo el contenido recibido para depuración
-file_put_contents("log_hook.txt", file_get_contents("php://input"));
-
-// Decodificar el JSON recibido
-$update = json_decode(file_get_contents("php://input"), true);
-if (!$update) exit;
-
-// Leer token desde config
-$config = json_decode(file_get_contents("botconfig.json"), true);
-$token = $config["token"] ?? "";
+// --- CONFIGURACIÓN ---
+$configFile = __DIR__ . "/botconfig.json";
+$token = "";
+if (file_exists($configFile)) {
+    $config = json_decode(file_get_contents($configFile), true);
+    $token = $config["token"] ?? "";
+}
 if (!$token) exit;
 
 $api = "https://api.telegram.org/bot$token";
 
-// Si es un callback_query (botón)
+// --- RECIBIR ACTUALIZACIÓN ---
+$raw = file_get_contents("php://input");
+file_put_contents("log_hook.txt", $raw); // Opcional para depurar
+
+$update = json_decode($raw, true);
+if (!$update) exit;
+
+// --- CALLBACK QUERY (BOTÓN INTERACTIVO) ---
 if (isset($update["callback_query"])) {
     $callback = $update["callback_query"];
     $data = $callback["data"] ?? "";
     $callback_id = $callback["id"];
     $chat_id = $callback["message"]["chat"]["id"];
 
-    // Confirmar el botón (eliminar loading)
+    // Confirmar botón (quita "loading" en Telegram)
     file_get_contents("$api/answerCallbackQuery?callback_query_id=$callback_id");
 
-    // Separar la acción del ID
+    // Separar acción y transactionId
     $parts = explode(":", $data);
     if (count($parts) !== 2) exit;
 
-    $accion = $parts[0];
-    $txid = $parts[1];
+    list($accion, $txid) = $parts;
 
-    // Guardar estado en archivo local
-    file_put_contents("estado_botones_$txid.json", json_encode(["status" => $accion]));
+    // Crear carpeta si no existe
+    $estadoDir = __DIR__ . "/status";
+    if (!is_dir($estadoDir)) mkdir($estadoDir);
 
-    // Enviar mensaje al usuario
-    $mensaje = "✅ Acción ejecutada: $accion (ID: $txid)";
-    file_get_contents("$api/sendMessage?chat_id=$chat_id&text=" . urlencode($mensaje));
+    // Guardar estado en archivo
+    $filename = "$estadoDir/{$txid}.json";
+    file_put_contents($filename, json_encode(["status" => $accion]));
+
+    // Confirmar acción al usuario
+    $mensaje = "✅ Acción recibida: *$accion*\n🔗 ID: `$txid`";
+    $params = [
+        "chat_id" => $chat_id,
+        "text" => $mensaje,
+        "parse_mode" => "Markdown"
+    ];
+    file_get_contents("$api/sendMessage?" . http_build_query($params));
 
     exit;
 }
 
-// Si es un mensaje normal
+// --- MENSAJE NORMAL ---
 if (isset($update["message"])) {
     $chat_id = $update["message"]["chat"]["id"];
     $text = $update["message"]["text"] ?? "";
 
-    // Enviar mensaje de confirmación
-    $respuesta = "👋 Hola, escribiste: \"$text\"";
-    file_get_contents("$api/sendMessage?chat_id=$chat_id&text=" . urlencode($respuesta));
+    // Mensaje de eco
+    $mensaje = "👋 Hola, escribiste: \"$text\"";
+    $params = [
+        "chat_id" => $chat_id,
+        "text" => $mensaje
+    ];
+    file_get_contents("$api/sendMessage?" . http_build_query($params));
 
     exit;
 }
